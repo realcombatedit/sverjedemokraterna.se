@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sverjedemokraterna</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            background: rgb(228, 224, 224);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            user-select: none;
+            overflow: hidden;
+        }
+        
+        /* Top banner area (desktop default) */
+        .banners {
+            position: absolute;
+            top: 2vw;
+            left: 2vw;
+            right: 0;
+            margin: 0 auto;
+            display: flex;
+            align-items: flex-start;
+            justify-content: left;
+            box-sizing: border-box;
+            z-index: 3;
+            pointer-events: none; 
+        }
+     
+
+        .banner-logo-text {
+            width: 17vw;
+            min-width: 20%;
+            height: auto;
+            
+        }
+        
+        /* Animation image wrapper: always aligned to bottom of window (desktop default) */
+        .image-wrapper {
+            position: absolute;
+            left: 55%;
+            bottom: 0;
+            transform: translateX(-50%);
+            width: 100vw;
+            height: 90vh;
+            z-index: 1;
+            display: flex;
+            align-items: flex-end; /* Tryck innehållet mot botten */
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        .drag-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            object-position: bottom center;
+            
+           
+            cursor: grab;
+            pointer-events: auto;
+            -webkit-user-drag: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .drag-image:active {
+            cursor: grabbing;
+        }
+
+        a {
+font-size: 12px;
+font-family: 'Times New Roman', Times, serif;
+font-weight: regular;
+text-decoration: none;
+
+        }
+
+        /* Responsive layout for smaller screens (phone) */
+        @media (max-width: 768px) {
+            .banners {
+                position: static;
+                width: 100%;
+                padding: 0; 
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                margin-top: 20px;
+            }
+
+            /* Second image at top, full width */
+            .banner-logo-text {
+                width: 100vw; 
+                max-width: 100%;
+            }
+
+
+            /* Animation at bottom, aligned with bottom of window */
+            .image-wrapper {
+                position: fixed;
+                left: 60%;
+                bottom: 0;
+                transform: translateX(-50%);
+                width: 160vw;
+                height: 85vh; /* leave room for banners above */
+                max-width: none;
+                max-height: none;
+            }
+
+        }
+
+        .webring-footer {
+    position: absolute;
+    bottom: 1vw; /* Samma marginal som du har i toppen */
+    left: 2vw;
+    z-index: 5; /* Högre än image-wrapper så länkarna går att klicka på */
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 12px;
+    pointer-events: auto; /* Säkerställer att länkarna fungerar */
+}
+
+/* Styla länkarna inuti */
+.webring-footer a {
+    color: black; /* Eller valfri färg */
+    text-decoration: none;
+}
+
+.webring-footer a:hover {
+    text-decoration: underline;
+}
+    </style>
+</head>
+<body>
+    <div class="container" id="container">
+        <!-- Top banner logos -->
+        <div class="banners">
+            <img src="logo_sverigedemokraterna_text.png" alt="Sverigedemokraterna Logo" class="banner-logo-text">
+        </div>
+       
+        <!-- Draggable image that cycles through animation frames -->
+        <div class="image-wrapper" id="imageWrapper">
+            <img src="JANI/jimmie_heil_100.png" alt="Drag Image" class="drag-image" id="dragImage" draggable="false">
+        </div>
+        <div class="webring-footer">
+            <a href="https://föregående.webb.sida" class="ring">←</a>
+            Part of the <a href="http://2026.worldwidewebring.club" class="ring">2026.worldwidewebring.club</a>
+            <a href="https://nästa.webb.sida" class="ring">→</a>
+        </div>
+    </div>
+
+
+    <script>
+        class DragImageAnimation {
+            constructor() {
+                this.dragImage = document.getElementById('dragImage');
+                this.imageWrapper = document.getElementById('imageWrapper');
+                this.container = document.getElementById('container');
+                
+                // Image sequence from highest to lowest (100 to 65)
+                this.imageSequence = [100, 98, 95, 90, 88, 87, 86, 85, 82, 79, 78, 77, 75, 74, 73, 72, 71, 70, 65];
+                this.currentImageIndex = 0; // Start at index 0 (image 100)
+                this.isDragging = false;
+                this.isPointerDown = false;      // pointer is down but not yet dragging
+                this.dragThreshold = 8;          // pixels you must move before it's a drag
+                this.isIntroPlaying = false;     // true while the initial animation is playing
+                this.startY = 0;
+                this.dragStartIndex = 0;         // index we start dragging from (so we can continue sequence)
+                this.maxDragDistance = 600; // Maximum drag distance in pixels (shorter path for easier dragging)
+                this.returnTimeout = null;
+                this.animationFrame = null;
+                
+                // Canvas for hit testing (checking if click is on transparent area)
+                this.hitTestCanvas = document.createElement('canvas');
+                this.hitTestContext = this.hitTestCanvas.getContext('2d', { willReadFrequently: true });
+                this.imageLoaded = false;
+                
+                this.init();
+                // Play the initial animation from lowest image up to 100 after a short delay
+                setTimeout(() => this.playIntroAnimation(), 0,1); // 1 second delay
+            }
+            
+            init() {
+                // Set initial image (100)
+                this.updateImage();
+                
+                // Prevent default drag behavior
+                this.dragImage.addEventListener('dragstart', (e) => e.preventDefault());
+                
+                // Mouse events - check if click is on non-transparent area
+                this.dragImage.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    if (this.isClickOnContent(e)) {
+                        this.startDrag(e);
+                    }
+                });
+                document.addEventListener('mousemove', (e) => this.drag(e));
+                document.addEventListener('mouseup', () => this.stopDrag());
+                
+                // Touch events for mobile
+                this.dragImage.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    if (this.isClickOnContent(e)) {
+                        this.startDrag(e);
+                    }
+                }, { passive: false });
+                document.addEventListener('touchmove', (e) => this.drag(e), { passive: false });
+                document.addEventListener('touchend', () => this.stopDrag());
+                
+                // Handle image load errors
+                this.dragImage.addEventListener('error', () => {
+                    console.warn('Image failed to load');
+                });
+                
+                // Update hit test canvas when image loads
+                this.dragImage.addEventListener('load', () => {
+                    this.updateHitTestCanvas();
+                });
+                
+                // Initial hit test update if image already loaded
+                if (this.dragImage.complete) {
+                    this.updateHitTestCanvas();
+                }
+            }
+            
+            updateHitTestCanvas() {
+                try {
+                    const img = this.dragImage;
+                    if (!img.complete || img.naturalWidth === 0 || img.naturalHeight === 0) {
+                        this.imageLoaded = false;
+                        return;
+                    }
+                    
+                    this.hitTestCanvas.width = img.naturalWidth;
+                    this.hitTestCanvas.height = img.naturalHeight;
+                    
+                    // Draw the image to canvas
+                    this.hitTestContext.drawImage(img, 0, 0);
+                    this.imageLoaded = true;
+                } catch (error) {
+                    // If there's an error (e.g., CORS), allow clicking anyway
+                    console.warn('Hit test canvas error:', error);
+                    this.imageLoaded = false;
+                }
+            }
+            
+            isClickOnContent(e) {
+                const img = this.dragImage;
+                const rect = img.getBoundingClientRect();
+                
+                // Get click coordinates
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                
+                // Simple bounds check first
+                if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+                    return false;
+                }
+                
+                if (!this.imageLoaded || !img.complete || img.naturalWidth === 0) {
+                    return true;
+                }
+                
+                try {
+                    const imgAspect = img.naturalWidth / img.naturalHeight;
+                    const rectAspect = rect.width / rect.height;
+                    
+                    let imgX, imgY, imgWidth, imgHeight;
+                    
+                    if (imgAspect > rectAspect) {
+                        // Image is wider than container - fit to width
+                        imgWidth = rect.width;
+                        imgHeight = rect.width / imgAspect;
+                        imgX = rect.left;
+                        
+                        // VIKTIG ÄNDRING HÄR:
+                        // Eftersom vi har object-position: bottom, ritas bilden längst ner
+                        imgY = rect.bottom - imgHeight; 
+                    } else {
+                        // Image is taller than container - fit to height
+                        imgHeight = rect.height;
+                        imgWidth = rect.height * imgAspect;
+                        
+                        // object-position: center (default horizontal)
+                        imgX = rect.left + (rect.width - imgWidth) / 2;
+                        imgY = rect.top; 
+                    }
+                    
+                    // Check if click is within the displayed image bounds
+                    if (clientX < imgX || clientX > imgX + imgWidth || clientY < imgY || clientY > imgY + imgHeight) {
+                        return false;
+                    }
+                    
+                    // Convert click position to image coordinates
+                    const x = ((clientX - imgX) / imgWidth) * img.naturalWidth;
+                    const y = ((clientY - imgY) / imgHeight) * img.naturalHeight;
+                    
+                    // Account for crop (från din originalkod)
+                    if (x < 65 || y < 35 || x >= img.naturalWidth - 35 || y >= img.naturalHeight - 35) {
+                        return false; 
+                    }
+                    
+                    const pixelX = Math.floor(x);
+                    const pixelY = Math.floor(y);
+                    
+                    if (pixelX < 0 || pixelY < 0 || pixelX >= this.hitTestCanvas.width || pixelY >= this.hitTestCanvas.height) {
+                        return false;
+                    }
+                    
+                    const pixelData = this.hitTestContext.getImageData(pixelX, pixelY, 1, 1);
+                    return pixelData.data[3] > 0;
+                    
+                } catch (error) {
+                    console.warn('Hit test error, allowing click:', error);
+                    return true;
+                }
+            }
+            
+            startDrag(e) {
+                // Ignore user input while intro animation is playing
+                if (this.isIntroPlaying) return;
+
+                this.isPointerDown = true;
+                this.isDragging = false; // will become true only after moving enough
+
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                this.startY = clientY;
+                // Start subsequent drags from wherever the user left off
+                this.dragStartIndex = this.currentImageIndex;
+            }
+            
+            playIntroAnimation() {
+                // Play once on load: from lowest image (last index) up to image 100 (index 0)
+                const startIndex = this.imageSequence.length - 1; // lowest image
+                const endIndex = 0; // image 100
+                const duration = 2000; // 2 seconds for full intro
+                const startTime = performance.now();
+
+                this.isIntroPlaying = true;
+                this.currentImageIndex = startIndex;
+                this.updateImage();
+
+                const animate = (currentTime) => {
+                    const elapsed = currentTime - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+
+                    // Same ease-in style: slow at first, then speeds up
+                    const easedProgress = Math.pow(progress, 2.6);
+
+                    const newIndex = Math.round(startIndex + (endIndex - startIndex) * easedProgress);
+                    this.currentImageIndex = Math.max(0, Math.min(newIndex, startIndex));
+                    this.updateImage();
+
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        this.currentImageIndex = endIndex;
+                        this.updateImage();
+                        this.isIntroPlaying = false;
+                    }
+                };
+
+                requestAnimationFrame(animate);
+            }
+            
+            drag(e) {
+                if (!this.isPointerDown) return; // only react if mouse/touch is down
+                e.preventDefault();
+                
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                const deltaY = clientY - this.startY;
+
+                // If we haven't started dragging yet, wait until movement passes threshold
+                if (!this.isDragging) {
+                    if (Math.abs(deltaY) < this.dragThreshold) {
+                        // Still just a click, not a drag
+                        return;
+                    }
+                    // Now it counts as a drag: start drag behavior
+                    this.isDragging = true;
+                    this.clearReturnTimeout();
+                    this.cancelAnimation();
+                    // IMPORTANT: do NOT reset to 100 here — continue from current frame
+                    this.dragStartIndex = this.currentImageIndex;
+                }
+                
+                // From here on, we are dragging for real
+                // Map drag distance to image index
+                // Positive deltaY (dragging down) = going from 100 to 65
+                // Negative deltaY (dragging up) = going back toward 100
+                // maxDragDistance = full range across the sequence
+                const dragProgress = deltaY / this.maxDragDistance; // can be negative
+                const indexOffset = Math.round(dragProgress * (this.imageSequence.length - 1));
+                const newIndex = this.dragStartIndex + indexOffset;
+
+                // Clamp to valid range
+                this.currentImageIndex = Math.max(0, Math.min(newIndex, this.imageSequence.length - 1));
+                
+                this.updateImage();
+            }
+            
+            updateImage() {
+                const imageNumber = this.imageSequence[this.currentImageIndex];
+                const newSrc = `JANI/jimmie_heil_${imageNumber}.png`;
+                if (this.dragImage.src !== newSrc) {
+                    this.dragImage.src = newSrc;
+                    this.imageLoaded = false; // Reset until new image loads
+                }
+            }
+            
+            stopDrag() {
+                if (!this.isPointerDown) return;
+
+                this.isPointerDown = false;
+
+                // If user never moved past threshold, it was just a click → do nothing
+                if (!this.isDragging) {
+                    return;
+                }
+
+                // For real drags, behave as before
+                this.isDragging = false;
+                this.scheduleReturn();
+            }
+            
+            scheduleReturn() {
+                this.clearReturnTimeout();
+                
+                this.returnTimeout = setTimeout(() => {
+                    this.returnToOriginal();
+                }, 300); // 3 seconds
+            }
+            
+            returnToOriginal() {
+                const startIndex = this.currentImageIndex;
+                const endIndex = 0; // Image 100
+                const duration = 1800; // 1.8 seconds animation
+                const startTime = performance.now();
+                
+                const animate = (currentTime) => {
+                    const elapsed = currentTime - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+
+                    // Ease-in (slow at first, then speeds up), regardless of where we start.
+                    // This removes the "slow last images" behavior.
+                    const easedProgress = Math.pow(progress, 2.6);
+
+                    const newIndex = Math.round(startIndex + (endIndex - startIndex) * easedProgress);
+                    this.currentImageIndex = Math.max(0, Math.min(newIndex, startIndex));
+                    this.updateImage();
+                    
+                    if (progress < 1) {
+                        this.animationFrame = requestAnimationFrame(animate);
+                    } else {
+                        this.currentImageIndex = endIndex;
+                        this.updateImage();
+                        this.animationFrame = null;
+                        // Update hit test canvas after animation completes
+                        if (this.imageLoaded) {
+                            this.updateHitTestCanvas();
+                        }
+                    }
+                };
+                
+                this.animationFrame = requestAnimationFrame(animate);
+            }
+            
+            clearReturnTimeout() {
+                if (this.returnTimeout) {
+                    clearTimeout(this.returnTimeout);
+                    this.returnTimeout = null;
+                }
+            }
+            
+            cancelAnimation() {
+                if (this.animationFrame) {
+                    cancelAnimationFrame(this.animationFrame);
+                    this.animationFrame = null;
+                }
+            }
+        }
+        
+        // Initialize the effect when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            new DragImageAnimation();
+        });
+    </script>
+</body>
+</html>
